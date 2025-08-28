@@ -1,305 +1,243 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Pesquisa de Serviços Públicos — OSM</title>
-  <!-- Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-sA+e2o0s0bQ7gkKkGk4h5wzQv0p3Z3bY2m5w5q5Z0+I=" crossorigin=""/>
+  <meta charset="UTF-8">
+  <title>Pesquisas de Serviços Públicos - OSM</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Leaflet MarkerCluster -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+  <!-- Axios para requisições -->
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+  <!-- Turf.js para geoprocessamento -->
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf/turf.min.js"></script>
+
+  <!-- Chart.js para gráficos -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <style>
-    :root{--sidebar-w:360px}
-    html,body,#map{height:100%;margin:0}
-    body{font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;background:#f7f8fb}
-    .topbar{position:fixed;left:var(--sidebar-w);right:0;top:0;height:56px;display:flex;align-items:center;padding:0 12px;background:linear-gradient(180deg,white,#fcfcff);box-shadow:0 1px 4px rgba(20,20,30,0.06);z-index:600}
-    .sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-w);background:#fff;box-shadow:2px 0 10px rgba(20,20,30,0.06);padding:12px;overflow:auto;z-index:650}
-    h1{font-size:16px;margin:8px 0}
-    label{display:block;margin:6px 0}
-    .controls{display:flex;gap:8px;align-items:center;margin:8px 0}
-    .btn{display:inline-block;padding:8px 10px;border-radius:8px;border:1px solid #ddd;background:#fff;cursor:pointer}
-    .btn.primary{background:#0b5cff;color:#fff;border-color:transparent}
-    .fixed-panel{position:fixed;right:12px;top:68px;width:320px;background:#fff;padding:10px;border-radius:8px;box-shadow:0 6px 24px rgba(20,20,30,0.08);z-index:650}
-    #chartWrap{height:220px}
-    .small{font-size:13px;color:#555}
-    .footer{font-size:12px;color:#777;margin-top:10px}
-    .legend-item{display:flex;gap:8px;align-items:center;margin:4px 0}
-    .icon-swatch{width:18px;height:18px;border-radius:4px;display:inline-block}
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      display: flex;
+      font-family: Arial, sans-serif;
+    }
+    #map {
+      flex: 1;
+    }
+    #sidebar {
+      width: 300px;
+      background: #f9f9f9;
+      border-left: 1px solid #ccc;
+      padding: 10px;
+      overflow-y: auto;
+    }
+    h2 {
+      font-size: 18px;
+      margin-top: 0;
+    }
+    select, button, input {
+      width: 100%;
+      margin-bottom: 8px;
+      padding: 6px;
+    }
+    canvas {
+      max-width: 100%;
+    }
   </style>
 </head>
 <body>
-  <div class="sidebar">
-    <h1>Pesquisa de Serviços Públicos (OSM)</h1>
-    <div class="small">Base: OpenStreetMap — busca via Overpass API</div>
-
-    <div style="margin-top:12px">
-      <label for="city">Cidade / local (ex: Recife, PE)</label>
-      <input id="city" type="text" placeholder="Digite uma cidade ou endereço" style="width:100%;padding:8px;border-radius:6px;border:1px solid #ddd" />
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <button id="locateBtn" class="btn">Localizar</button>
-        <button id="bboxBtn" class="btn">Usar mapa (área visível)</button>
-      </div>
-    </div>
-
-    <h2 style="font-size:14px;margin-top:12px">Tipos a pesquisar</h2>
-    <div id="types">
-      <!-- Checkboxes populated by JS -->
-    </div>
-
-    <div style="margin-top:8px">
-      <label><input type="checkbox" id="cluster" checked /> Agrupar marcadores</label>
-    </div>
-
-    <div style="margin-top:12px;display:flex;gap:8px">
-      <button id="searchBtn" class="btn primary">Pesquisar</button>
-      <button id="clearBtn" class="btn">Limpar</button>
-    </div>
-
-    <div style="margin-top:12px">
-      <button id="downloadBtn" class="btn">Baixar GeoJSON</button>
-      <div class="footer">Exporta os resultados visíveis como GeoJSON</div>
-    </div>
-
-    <div style="margin-top:12px">
-      <div class="small">Legenda</div>
-      <div id="legend"></div>
-    </div>
-
-    <div class="footer">Sugestão: publique este arquivo no GitHub e ative o GitHub Pages para hospedar.</div>
+  <div id="map"></div>
+  <div id="sidebar">
+    <h2>Serviços Públicos</h2>
+    <input type="text" id="cidade" placeholder="Digite uma cidade">
+    <button id="btnLocalizar">Localizar Cidade</button>
+    <select id="tipoServico">
+      <option value="school">Escolas</option>
+      <option value="hospital">Hospitais</option>
+      <option value="clinic">Postos de Saúde</option>
+      <option value="grave_yard">Cemitérios</option>
+      <option value="park">Praças</option>
+      <option value="townhall">Prefeituras</option>
+      <option value="public_building">Câmaras de Vereadores</option>
+      <option value="police">Polícia</option>
+      <option value="fire_station">Bombeiros</option>
+      <option value="ambulance_station">SAMU</option>
+      <option value="government">Secretarias</option>
+    </select>
+    <button id="btnPesquisar">Pesquisar</button>
+    <button id="btnDownload">Baixar GeoJSON</button>
+    <h3>Contagem por Bairro</h3>
+    <canvas id="chart"></canvas>
   </div>
-
-  <div class="topbar">
-    <div style="font-weight:600">Mapa — Serviços Públicos</div>
-    <div style="flex:1"></div>
-    <div class="small">Dados: OpenStreetMap • Código aberto</div>
-  </div>
-
-  <div id="map" style="position:fixed;left:var(--sidebar-w);top:56px;right:0;bottom:0"></div>
-
-  <div class="fixed-panel">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <strong>Contador por bairro</strong>
-      <button id="refreshCounts" class="btn" title="Recontar">⟳</button>
-    </div>
-    <div id="chartWrap"><canvas id="countsChart" width="300" height="220"></canvas></div>
-    <div class="small" style="margin-top:8px">Mostra os 8 bairros com mais resultados dentro da área pesquisada.</div>
-  </div>
-
-  <!-- Libraries -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-o9N1j7k7Q+gY6v0Xg5n0w3n0kKXQ+4u0a4G6Y5s6bQ8=" crossorigin=""></script>
-  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
-  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
   <script>
-  // Lista de tipos/amenities e as chaves OSM a consultar
-  const TYPES = [
-    { id:'school', label:'Escolas', query: '(node["amenity"="school"](bbox);way["amenity"="school"](bbox);relation["amenity"="school"](bbox);)' , color:'#1f77b4' },
-    { id:'clinic', label:'Postos de saúde / Clínicas', query: '(node["amenity"~"clinic|doctors|health_post|health_center|surgery"](bbox);way["amenity"~"clinic|doctors|health_post|health_center|surgery"](bbox);relation["amenity"~"clinic|doctors|health_post|health_center|surgery"](bbox);)', color:'#ff7f0e' },
-    { id:'hospital', label:'Hospitais', query: '(node["amenity"="hospital"](bbox);way["amenity"="hospital"](bbox);relation["amenity"="hospital"](bbox);)', color:'#d62728' },
-    { id:'cemetery', label:'Cemitério', query: '(node["landuse"="cemetery"](bbox);way["landuse"="cemetery"](bbox);relation["landuse"="cemetery"](bbox);)', color:'#9467bd' },
-    { id:'park', label:'Praças / Parques', query: '(node["leisure"="park"](bbox);way["leisure"="park"](bbox);relation["leisure"="park"](bbox);)', color:'#2ca02c' },
-    { id:'townhall', label:'Prefeitura / Câmara', query: '(node["amenity"~"townhall|public_building"](bbox);way["amenity"~"townhall|public_building"](bbox);relation["amenity"~"townhall|public_building"](bbox);)', color:'#8c564b' },
-    { id:'police', label:'Polícia / Batalhão', query: '(node["amenity"="police"](bbox);way["amenity"="police"](bbox);relation["amenity"="police"](bbox);)', color:'#e377c2' },
-    { id:'fire', label:'Bombeiros', query: '(node["amenity"="fire_station"](bbox);way["amenity"="fire_station"](bbox);relation["amenity"="fire_station"](bbox);)', color:'#7f7f7f' },
-    { id:'samu', label:'SAMU / Ambulância', query: '(node["emergency"="ambulance_station"](bbox);way["emergency"="ambulance_station"](bbox);relation["emergency"="ambulance_station"](bbox);)', color:'#17becf' },
-    { id:'secretaria', label:'Secretarias (prefeitura/estado)', query: '(node["office"~"government|public_authority|department"](bbox);way["office"~"government|public_authority|department"](bbox);relation["office"~"government|public_authority|department"](bbox);)', color:'#bcbd22' }
-  ];
+    // Inicializa o mapa
+    const map = L.map('map').setView([-15.78, -47.93], 5);
 
-  // Inicializa interface
-  const typesDiv = document.getElementById('types');
-  const legendDiv = document.getElementById('legend');
-  TYPES.forEach(t=>{
-    const id = 'chk-'+t.id;
-    typesDiv.innerHTML += `<label><input type="checkbox" id="${id}" checked /> ${t.label}</label>`;
-    legendDiv.innerHTML += `<div class="legend-item"><span class="icon-swatch" style="background:${t.color}"></span>${t.label}</div>`;
-  });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap colaboradores'
+    }).addTo(map);
 
-  // Mapa
-  const map = L.map('map', {attributionControl:true}).setView([-8.0539,-34.8801],13);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
+    // Cluster para marcadores
+    const markers = L.markerClusterGroup().addTo(map);
 
-  let markersLayer = L.layerGroup().addTo(map);
-  const markerCluster = L.markerClusterGroup();
+    // Dados da última consulta
+    let lastGeoJSON = null;
 
-  // Estado
-  let currentGeoJSON = null;
-  let currentPoints = null; // FeatureCollection
-  let currentPolygons = null; // bairros
-
-  // Helpers
-  function buildOverpassQuery(bbox, typesSelected){
-    // bbox = south,west,north,east
-    const bboxStr = `${bbox.getSouth()},${bbox.getWest()},${bbox.getNorth()},${bbox.getEast()}`;
-    const parts = typesSelected.map(t=>t.query.replace(/bbox/g, bboxStr));
-    const union = parts.join('\n');
-    return `[out:json][timeout:60];(\n${union}\n);out body;>;out skel qt;`;
-  }
-
-  async function fetchOverpass(q){
-    const url = 'https://overpass-api.de/api/interpreter';
-    const res = await axios.post(url, q, {headers:{'Content-Type':'text/plain'}});
-    return res.data;
-  }
-
-  function osmToGeoJSON(osmJson){
-    // Convert nodes + ways to GeoJSON features (simple approach)
-    const nodes = {};
-    const features = [];
-    osmJson.elements.forEach(el=>{
-      if(el.type==='node') nodes[el.id]=el;
+    // Localizar cidade com Nominatim
+    document.getElementById('btnLocalizar').addEventListener('click', async () => {
+      const cidade = document.getElementById('cidade').value;
+      if (!cidade) return alert("Digite o nome de uma cidade.");
+      try {
+        const resp = await axios.get(`https://nominatim.openstreetmap.org/search`, {
+          params: {
+            q: cidade,
+            format: "json",
+            limit: 1
+          }
+        });
+        if (resp.data.length > 0) {
+          const { lat, lon } = resp.data[0];
+          map.setView([lat, lon], 13);
+        } else {
+          alert("Cidade não encontrada.");
+        }
+      } catch (err) {
+        alert("Erro ao buscar cidade.");
+      }
     });
-    osmJson.elements.forEach(el=>{
-      if(el.type==='node'){
-        features.push({type:'Feature',geometry:{type:'Point',coordinates:[el.lon,el.lat]},properties:el.tags || {}});
-      } else if(el.type==='way'){
-        if(el.nodes && el.nodes.length){
-          const coords = el.nodes.map(id=> nodes[id] ? [nodes[id].lon,nodes[id].lat] : null).filter(Boolean);
-          if(coords.length>0){
-            features.push({type:'Feature',geometry:{type:'LineString',coordinates:coords},properties:el.tags || {}});
+
+    // Pesquisa serviços públicos via Overpass
+    document.getElementById('btnPesquisar').addEventListener('click', async () => {
+      const tipo = document.getElementById('tipoServico').value;
+      const bounds = map.getBounds();
+      const query = `
+        [out:json][timeout:25];
+        (
+          node["amenity"="${tipo}"](${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()});
+          way["amenity"="${tipo}"](${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()});
+          relation["amenity"="${tipo}"](${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()});
+        );
+        out body;
+        >;
+        out skel qt;
+      `;
+
+      try {
+        const resp = await axios.post("https://overpass-api.de/api/interpreter", query, {
+          headers: { "Content-Type": "text/plain" }
+        });
+
+        const data = resp.data;
+        const geojson = osmtogeojson(data);
+
+        markers.clearLayers();
+        const layer = L.geoJSON(geojson, {
+          onEachFeature: (feature, layer) => {
+            let props = feature.properties;
+            let popup = `<b>${props.tags.name || "Sem nome"}</b><br/>${tipo}`;
+            layer.bindPopup(popup);
+          }
+        });
+        markers.addLayer(layer);
+
+        lastGeoJSON = geojson;
+        atualizarGrafico(geojson);
+      } catch (err) {
+        alert("Erro na consulta Overpass.");
+        console.error(err);
+      }
+    });
+
+    // Baixar resultado em GeoJSON
+    document.getElementById('btnDownload').addEventListener('click', () => {
+      if (!lastGeoJSON) return alert("Nenhum resultado para baixar.");
+      const blob = new Blob([JSON.stringify(lastGeoJSON)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "servicos_publicos.geojson";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // Atualizar gráfico com contagem simples (por "bairro" = tag addr:suburb se existir)
+    function atualizarGrafico(geojson) {
+      let counts = {};
+      geojson.features.forEach(f => {
+        let bairro = f.properties.tags["addr:suburb"] || "Desconhecido";
+        counts[bairro] = (counts[bairro] || 0) + 1;
+      });
+
+      let labels = Object.keys(counts);
+      let values = Object.values(counts);
+
+      const ctx = document.getElementById('chart').getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Quantidade',
+            data: values
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false }
           }
         }
-      } else if(el.type==='relation'){
-        // skip complex conversion for brevity
-      }
-    });
-    return {type:'FeatureCollection',features};
-  }
+      });
+    }
 
-  function addToMap(geojson){
-    markersLayer.clearLayers();
-    markerCluster.clearLayers();
+    // Conversor OSM → GeoJSON (osmtogeojson)
+    function osmtogeojson(data) {
+      // Biblioteca mínima incluída aqui (adaptada)
+      return osm2geojson(data);
+    }
 
-    const useCluster = document.getElementById('cluster').checked;
+    // Pequena versão inline do osm2geojson
+    // (mais leve que importar via <script>)
+    function osm2geojson(json) {
+      let geojson = { type: "FeatureCollection", features: [] };
+      if (!json.elements) return geojson;
 
-    geojson.features.forEach(f=>{
-      if(f.geometry.type==='Point'){
-        const props = f.properties||{};
-        const label = props.name || props.official_name || props.org || props['operator'] || 'sem nome';
-        const marker = L.circleMarker([f.geometry.coordinates[1],f.geometry.coordinates[0]],{radius:8,fillOpacity:0.9,weight:1});
-        marker.bindPopup(`<strong>${label}</strong><br/>${Object.entries(props).map(kv=>`<b>${kv[0]}</b>: ${kv[1]}`).slice(0,8).join('<br/>')}`);
-        if(useCluster) markerCluster.addLayer(marker); else markersLayer.addLayer(marker);
-      } else {
-        // draw lines/polygons lightly
-        const layer = L.geoJSON(f,{style:{color:'#666',weight:1,opacity:0.7}});
-        markersLayer.addLayer(layer);
-      }
-    });
-
-    if(useCluster) map.addLayer(markerCluster);
-  }
-
-  // Contadores por bairro: buscamos relações/ways com admin_level=8 (bairros/municípios locais) dentro bbox
-  async function fetchAdminPolygons(bbox){
-    const bboxStr = `${bbox.getSouth()},${bbox.getWest()},${bbox.getNorth()},${bbox.getEast()}`;
-    const q = `[out:json][timeout:60];(relation["admin_level"~"8|9"](${bboxStr});way["boundary"="administrative"]["admin_level"~"8|9"](${bboxStr}););out body;>;out skel qt;`;
-    const data = await fetchOverpass(q);
-    // naive convert: we will try to build polygons from ways -> this is best-effort
-    const features = [];
-    const nodes = {};
-    data.elements.forEach(el=>{ if(el.type==='node') nodes[el.id]=el; });
-    // handle ways
-    data.elements.forEach(el=>{
-      if(el.type==='way' && el.nodes){
-        const coords = el.nodes.map(id=>nodes[id] ? [nodes[id].lon,nodes[id].lat] : null).filter(Boolean);
-        if(coords.length>=3){
-          features.push({type:'Feature',geometry:{type:'Polygon',coordinates:[coords]},properties:el.tags||{}});
+      json.elements.forEach(el => {
+        if (el.type === "node") {
+          geojson.features.push({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [el.lon, el.lat] },
+            properties: { id: el.id, tags: el.tags || {} }
+          });
         }
-      }
-    });
-    // TODO: relations polygons could be skipped
-    return {type:'FeatureCollection',features};
-  }
-
-  function countPointsByPolygon(pointsFC, polygonsFC){
-    const counts = {};
-    polygonsFC.features.forEach(p=>{
-      const name = p.properties && (p.properties.name || p.properties['ref'] || 'sem_nome');
-      const pts = turf.pointsWithinPolygon(pointsFC, p);
-      counts[name] = pts.features.length;
-    });
-    return counts;
-  }
-
-  // UI actions
-  document.getElementById('locateBtn').addEventListener('click', async()=>{
-    const q = document.getElementById('city').value;
-    if(!q) return alert('Digite uma cidade ou localização.');
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`;
-    const res = await axios.get(url,{headers:{'Accept':'application/json'}});
-    if(!res.data || res.data.length===0) return alert('Local não encontrado. Tente outro termo.');
-    const r = res.data[0];
-    const bbox = [parseFloat(r.boundingbox[0]),parseFloat(r.boundingbox[2]),parseFloat(r.boundingbox[1]),parseFloat(r.boundingbox[3])];
-    const southWest = L.latLng(parseFloat(r.boundingbox[0]),parseFloat(r.boundingbox[2]));
-    const northEast = L.latLng(parseFloat(r.boundingbox[1]),parseFloat(r.boundingbox[3]));
-    const bounds = L.latLngBounds([southWest,northEast]);
-    map.fitBounds(bounds);
-  });
-
-  document.getElementById('bboxBtn').addEventListener('click',()=>{
-    const bounds = map.getBounds();
-    document.getElementById('city').value = `Mapa: ${bounds.toBBoxString()}`;
-    alert('Área definida: use Pesquisar para buscar dentro da área visível.');
-  });
-
-  document.getElementById('searchBtn').addEventListener('click',async()=>{
-    const bounds = map.getBounds();
-    const selected = TYPES.filter(t=>document.getElementById('chk-'+t.id).checked);
-    if(selected.length===0) return alert('Selecione ao menos um tipo.');
-    const q = buildOverpassQuery(bounds, selected);
-    try{
-      document.getElementById('searchBtn').innerText='Buscando...';
-      const data = await fetchOverpass(q);
-      const geo = osmToGeoJSON(data);
-      currentGeoJSON = geo;
-      // normalize points-only for counting
-      const points = {type:'FeatureCollection',features:geo.features.filter(f=>f.geometry.type==='Point')};
-      currentPoints = points;
-      addToMap(geo);
-      // fetch polygons (bairros) and count
-      const polys = await fetchAdminPolygons(bounds);
-      currentPolygons = polys;
-      updateChart();
-    }catch(err){
-      console.error(err);alert('Erro na consulta Overpass. Tente novamente mais tarde.');
-    }finally{
-      document.getElementById('searchBtn').innerText='Pesquisar';
+        if (el.type === "way" && el.nodes) {
+          let coords = el.nodes.map(nid => {
+            let node = json.elements.find(e => e.type === "node" && e.id === nid);
+            return node ? [node.lon, node.lat] : null;
+          }).filter(Boolean);
+          geojson.features.push({
+            type: "Feature",
+            geometry: { type: "Polygon", coordinates: [coords] },
+            properties: { id: el.id, tags: el.tags || {} }
+          });
+        }
+      });
+      return geojson;
     }
-  });
-
-  document.getElementById('clearBtn').addEventListener('click',()=>{
-    markersLayer.clearLayers(); markerCluster.clearLayers(); currentGeoJSON=null; currentPoints=null; currentPolygons=null; updateChart();
-  });
-
-  document.getElementById('downloadBtn').addEventListener('click',()=>{
-    if(!currentGeoJSON) return alert('Nenhum dado para exportar. Faça uma pesquisa primeiro.');
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentGeoJSON));
-    const a = document.createElement('a'); a.href=dataStr; a.download='servicos_osm.geojson'; document.body.appendChild(a); a.click(); a.remove();
-  });
-
-  document.getElementById('refreshCounts').addEventListener('click',()=> updateChart());
-
-  // Chart
-  let chart = null;
-  function updateChart(){
-    const ctx = document.getElementById('countsChart').getContext('2d');
-    if(!currentPoints || !currentPolygons) {
-      if(chart){ chart.destroy(); chart=null; }
-      ctx.clearRect(0,0,300,220);
-      return;
-    }
-    const counts = countPointsByPolygon(currentPoints, currentPolygons);
-    // convert to array sorted
-    const arr = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8);
-    const labels = arr.map(a=>a[0]);
-    const values = arr.map(a=>a[1]);
-    if(chart) chart.destroy();
-    chart = new Chart(ctx,{type:'bar',data:{labels, datasets:[{label:'Quantidade',data:values}]}, options:{maintainAspectRatio:false,plugins:{legend:{display:false}}}});
-  }
-
-  // inicial: centraliza em Brasil
-  map.setView([-8.0539,-34.8801],11);
-
   </script>
 </body>
 </html>
+
